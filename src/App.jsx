@@ -127,8 +127,22 @@ export default function App() {
             ))}
           </div>
           {view === 'documents' && (
-            <div className="px-3 mt-2 flex-1 overflow-y-auto">
-              <p className="text-[10px] text-blue-300 uppercase tracking-widest mb-2">Documents</p>
+            <div className="px-3 mt-2 flex-1 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-blue-300 uppercase tracking-widest">Documents</p>
+                <label className="cursor-pointer text-[10px] bg-[#F0AB00] text-[#00335B] font-bold px-2 py-0.5 rounded hover:bg-yellow-300 transition">
+                  + Add
+                  <input type="file" accept=".txt,.pdf,.docx,.xlsx,.xls" className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files[0]
+                      if (!file) return
+                      const { parseFile } = await import('./utils/fileParser')
+                      const text = await parseFile(file)
+                      await handleUpload(file, text)
+                      e.target.value = ''
+                    }} />
+                </label>
+              </div>
               {documents.map(d => (
                 <button key={d.id} onClick={() => setActiveDocId(d.id)}
                   className={`w-full text-left text-xs px-2 py-1.5 rounded mb-0.5 truncate transition group flex items-center gap-1 ${activeDocId === d.id ? 'bg-white/20 text-white' : 'text-blue-200 hover:bg-white/10 hover:text-white'}`}>
@@ -169,9 +183,6 @@ export default function App() {
                   pendingSelection={pendingSelection}
                   onSelectionChange={setPendingSelection}
                 />
-                <div className="p-2 border-t bg-gray-50 flex-shrink-0">
-                  <DocumentUploader onUpload={handleUpload} />
-                </div>
               </>
             )}
           </div>
