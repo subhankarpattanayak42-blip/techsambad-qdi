@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAI } from '../hooks/useAI'
 
-export default function DocumentViewer({ document: doc, segments, codes, onAddSegment, onDeleteSegment, onUpdateSegment, pendingSelection, onSelectionChange }) {
+const PRESET_COLORS = ['#FCD34D','#86EFAC','#93C5FD','#F9A8D4','#A5B4FC','#6EE7B7','#FCA5A5','#67E8F9','#D8B4FE','#FB923C','#A3E635','#F472B6','#34D399','#60A5FA','#FBBF24']
+
+export default function DocumentViewer({ document: doc, segments, codes, onAddSegment, onDeleteSegment, onUpdateSegment, onAddCode, pendingSelection, onSelectionChange }) {
   const [memoEdit, setMemoEdit] = useState(null)
   const [flash, setFlash] = useState(null)
   const [aiSuggestions, setAiSuggestions] = useState([])
@@ -69,15 +71,16 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     }
   }
 
-  function applyAISuggestion(suggestion) {
+  async function applyAISuggestion(suggestion) {
     // Find existing code by name (case-insensitive)
-    const existing = codes.find(c => c.name.toLowerCase() === suggestion.code.toLowerCase())
-    if (existing) {
-      assignCode(existing.id, existing.name, existing.color)
-    } else {
-      // Show suggestion text in status — user needs to create the code first
-      setAiError(`Code "${suggestion.code}" doesn't exist yet. Create it in the Codes panel first, then assign.`)
+    let existing = codes.find(c => c.name.toLowerCase() === suggestion.code.toLowerCase())
+    if (!existing) {
+      // Pick a colour not already used
+      const usedColors = new Set(codes.map(c => c.color))
+      const color = PRESET_COLORS.find(c => !usedColors.has(c)) || PRESET_COLORS[codes.length % PRESET_COLORS.length]
+      existing = await onAddCode(suggestion.code, color, null)
     }
+    assignCode(existing.id, existing.name, existing.color)
     setAiSuggestions([])
   }
 

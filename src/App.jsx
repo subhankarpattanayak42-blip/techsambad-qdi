@@ -165,6 +165,7 @@ export default function App() {
                   onAddSegment={addSegment}
                   onDeleteSegment={deleteSegment}
                   onUpdateSegment={updateSegment}
+                  onAddCode={addCode}
                   pendingSelection={pendingSelection}
                   onSelectionChange={setPendingSelection}
                 />
