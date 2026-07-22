@@ -4,7 +4,9 @@ import Layout from './components/Layout'
 import DocumentUploader from './components/DocumentUploader'
 import DocumentViewer from './components/DocumentViewer'
 import CodeManager from './components/CodeManager'
+import MemoPanel from './components/MemoPanel'
 import SearchPanel from './components/SearchPanel'
+import RetrievalPanel from './components/RetrievalPanel'
 import AnalysisPanel from './components/AnalysisPanel'
 import ExportPanel from './components/ExportPanel'
 import SettingsPanel from './components/SettingsPanel'
@@ -13,7 +15,9 @@ import { useProject } from './hooks/useProject'
 const NAV = [
   { id: 'documents', label: '📄 Documents' },
   { id: 'codes', label: '🏷 Codes' },
+  { id: 'memos', label: '🪞 Memos' },
   { id: 'search', label: '🔍 Search' },
+  { id: 'retrieval', label: '🔎 Retrieval' },
   { id: 'analysis', label: '📊 Analysis' },
   { id: 'export', label: '⬇ Export' },
   { id: 'settings', label: '⚙ Settings' },
@@ -25,13 +29,15 @@ export default function App() {
   const [selectedCodeId, setSelectedCodeId] = useState(null)
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const [pendingSelection, setPendingSelection] = useState(null)
 
   const {
-    projects, activeProject, documents, codes, segments,
+    projects, activeProject, documents, codes, segments, memos,
     createProject, deleteProject, openProject,
     addDocument, deleteDocument,
     addCode, updateCode, deleteCode,
     addSegment, updateSegment, deleteSegment,
+    addMemo, updateMemo, deleteMemo,
   } = useProject()
 
   const activeDoc = documents.find(d => d.id === activeDocId) || null
@@ -42,10 +48,13 @@ export default function App() {
     setView('documents')
   }
 
-  // Attach createCode helper to addSegment so DocumentViewer can create codes inline
-  addSegment.__createCode = addCode
+  function handleAssign(codeId) {
+    if (!pendingSelection || !activeDoc) return
+    addSegment(activeDoc.id, pendingSelection.text, codeId, pendingSelection.start, pendingSelection.end)
+    window.getSelection()?.removeAllRanges()
+    setPendingSelection(null)
+  }
 
-  // Project home screen
   if (!activeProject) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#00335B] to-[#007DB8] flex items-center justify-center">
@@ -57,7 +66,6 @@ export default function App() {
               <p className="text-xs text-gray-500">Qualitative Data Intelligence</p>
             </div>
           </div>
-
           <h2 className="font-semibold text-gray-700 mb-3 text-sm">Your Projects</h2>
           {projects.length === 0 && <p className="text-sm text-gray-400 mb-4">No projects yet. Create one to get started.</p>}
           <div className="space-y-2 mb-4 max-h-56 overflow-y-auto">
@@ -76,7 +84,6 @@ export default function App() {
               </div>
             ))}
           </div>
-
           {showNewProject ? (
             <div className="flex gap-2">
               <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
@@ -101,8 +108,8 @@ export default function App() {
       header={
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-white opacity-90">{activeProject.name}</span>
-          <span className="text-xs text-blue-200">{documents.length} docs · {codes.length} codes · {segments.length} segments</span>
-          <button onClick={() => { setActiveDocId(null); openProject.__close?.() || window.location.reload() }}
+          <span className="text-xs text-blue-200">{documents.length} docs · {codes.length} codes · {segments.length} segments · {memos.length} memos</span>
+          <button onClick={() => window.location.reload()}
             className="ml-auto text-xs text-blue-200 hover:text-white border border-blue-400/30 px-2 py-0.5 rounded hover:bg-blue-800/30 transition">
             ← Projects
           </button>
@@ -120,7 +127,7 @@ export default function App() {
             ))}
           </div>
           {view === 'documents' && (
-            <div className="px-3 mt-4 flex-1 overflow-y-auto">
+            <div className="px-3 mt-2 flex-1 overflow-y-auto">
               <p className="text-[10px] text-blue-300 uppercase tracking-widest mb-2">Documents</p>
               {documents.map(d => (
                 <button key={d.id} onClick={() => setActiveDocId(d.id)}
@@ -135,42 +142,41 @@ export default function App() {
         </div>
       }
     >
+      {/* Documents view — viewer + code panel + memo panel */}
       {view === 'documents' && (
         <div className="flex flex-1 overflow-hidden">
+          {/* Document viewer */}
           <div className="flex flex-col flex-1 overflow-hidden">
-            {documents.length === 0 || !activeDoc ? (
+            {!activeDoc ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
-                {documents.length === 0 && (
-                  <div className="w-full max-w-md">
-                    <DocumentUploader onUpload={handleUpload} />
-                  </div>
-                )}
-                {documents.length > 0 && !activeDoc && (
-                  <div className="text-center text-gray-400">
-                    <div className="text-4xl mb-2">👈</div>
-                    <p className="text-sm">Select a document from the sidebar</p>
-                    <div className="mt-6 max-w-xs"><DocumentUploader onUpload={handleUpload} /></div>
-                  </div>
+                <div className="w-full max-w-md">
+                  <DocumentUploader onUpload={handleUpload} />
+                </div>
+                {documents.length > 0 && (
+                  <p className="text-sm text-gray-400">← Select a document from the sidebar</p>
                 )}
               </div>
             ) : (
-              <DocumentViewer
-                document={activeDoc}
-                segments={segments}
-                codes={codes}
-                onAddSegment={addSegment}
-                onDeleteSegment={deleteSegment}
-                onUpdateSegment={updateSegment}
-              />
-            )}
-            {documents.length > 0 && activeDoc && (
-              <div className="p-3 border-t bg-gray-50 flex-shrink-0">
-                <DocumentUploader onUpload={handleUpload} />
-              </div>
+              <>
+                <DocumentViewer
+                  document={activeDoc}
+                  segments={segments}
+                  codes={codes}
+                  onAddSegment={addSegment}
+                  onDeleteSegment={deleteSegment}
+                  onUpdateSegment={updateSegment}
+                  pendingSelection={pendingSelection}
+                  onSelectionChange={setPendingSelection}
+                />
+                <div className="p-2 border-t bg-gray-50 flex-shrink-0">
+                  <DocumentUploader onUpload={handleUpload} />
+                </div>
+              </>
             )}
           </div>
-          {/* Code manager side panel */}
-          <div className="w-52 border-l bg-white flex flex-col overflow-hidden flex-shrink-0">
+
+          {/* Code panel */}
+          <div className="w-48 border-l bg-white flex flex-col overflow-hidden flex-shrink-0">
             <CodeManager
               codes={codes}
               segments={segments}
@@ -179,13 +185,40 @@ export default function App() {
               onDeleteCode={deleteCode}
               onSelectCode={setSelectedCodeId}
               selectedCodeId={selectedCodeId}
+              pendingSelection={pendingSelection}
+              onAssign={handleAssign}
             />
+          </div>
+
+          {/* Memo panel */}
+          <div className="w-56 border-l bg-white flex flex-col overflow-hidden flex-shrink-0">
+            <div className="px-3 py-2 border-b bg-gray-50">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Memos</p>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <MemoPanel
+                memos={memos}
+                segments={segments}
+                documents={documents}
+                codes={codes}
+                onAddMemo={addMemo}
+                onUpdateMemo={updateMemo}
+                onDeleteMemo={deleteMemo}
+                activeDocId={activeDocId}
+              />
+            </div>
           </div>
         </div>
       )}
+
+      {/* Codes view */}
       {view === 'codes' && (
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-64 border-r bg-white"><CodeManager codes={codes} segments={segments} onAddCode={addCode} onUpdateCode={updateCode} onDeleteCode={deleteCode} onSelectCode={setSelectedCodeId} selectedCodeId={selectedCodeId} /></div>
+          <div className="w-64 border-r bg-white">
+            <CodeManager codes={codes} segments={segments} onAddCode={addCode} onUpdateCode={updateCode}
+              onDeleteCode={deleteCode} onSelectCode={setSelectedCodeId} selectedCodeId={selectedCodeId}
+              pendingSelection={null} onAssign={() => {}} />
+          </div>
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
             <h2 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">
               {selectedCodeId ? `Segments: ${codes.find(c => c.id === selectedCodeId)?.name}` : 'All Coded Segments'}
@@ -193,14 +226,16 @@ export default function App() {
             {(selectedCodeId ? segments.filter(s => s.codeId === selectedCodeId) : segments).map(seg => {
               const code = codes.find(c => c.id === seg.codeId)
               const doc = documents.find(d => d.id === seg.documentId)
+              const parent = code?.parentId ? codes.find(c => c.id === code.parentId) : null
               return (
                 <div key={seg.id} className="bg-white rounded-lg border p-3 mb-2">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {parent && <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ backgroundColor: parent.color + '60', color: '#333' }}>{parent.name}</span>}
+                    {parent && <span className="text-gray-300 text-xs">›</span>}
                     {code && <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ backgroundColor: code.color }}>{code.name}</span>}
-                    <span className="text-[10px] text-gray-400">{doc?.name}</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">{doc?.name}</span>
                   </div>
                   <p className="text-sm text-gray-700">"{seg.text}"</p>
-                  {seg.memo && <p className="text-xs text-gray-400 mt-1 italic">📝 {seg.memo}</p>}
                 </div>
               )
             })}
@@ -208,7 +243,27 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Memos view */}
+      {view === 'memos' && (
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            <MemoPanel
+              memos={memos}
+              segments={segments}
+              documents={documents}
+              codes={codes}
+              onAddMemo={addMemo}
+              onUpdateMemo={updateMemo}
+              onDeleteMemo={deleteMemo}
+              activeDocId={null}
+            />
+          </div>
+        </div>
+      )}
+
       {view === 'search' && <SearchPanel segments={segments} codes={codes} documents={documents} onSelectDocument={id => { setActiveDocId(id); setView('documents') }} />}
+      {view === 'retrieval' && <RetrievalPanel segments={segments} codes={codes} documents={documents} memos={memos} />}
       {view === 'analysis' && <AnalysisPanel segments={segments} codes={codes} documents={documents} />}
       {view === 'export' && <ExportPanel project={activeProject} segments={segments} codes={codes} documents={documents} />}
       {view === 'settings' && <SettingsPanel />}

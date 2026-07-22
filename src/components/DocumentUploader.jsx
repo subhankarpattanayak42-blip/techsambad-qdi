@@ -29,12 +29,12 @@ export default function DocumentUploader({ onUpload }) {
     >
       <div className="text-3xl mb-2">📄</div>
       <p className="text-sm text-gray-600 font-medium">Drop files here or click to upload</p>
-      <p className="text-xs text-gray-400 mt-1">Supports TXT, PDF, DOCX</p>
+      <p className="text-xs text-gray-400 mt-1">Supports TXT, PDF, DOCX, XLSX</p>
       <input
         ref={inputRef}
         type="file"
         multiple
-        accept=".txt,.pdf,.docx"
+        accept=".txt,.pdf,.docx,.xlsx,.xls"
         className="hidden"
         onChange={e => handleFiles(e.target.files)}
       />

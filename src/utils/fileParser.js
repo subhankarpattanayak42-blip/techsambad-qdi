@@ -16,6 +16,9 @@ export async function parseFile(file) {
   if (ext === 'docx') {
     return await parseDOCX(file)
   }
+  if (ext === 'xlsx' || ext === 'xls') {
+    return await parseExcel(file)
+  }
   throw new Error(`Unsupported file type: .${ext}`)
 }
 
@@ -36,4 +39,21 @@ async function parseDOCX(file) {
   const arrayBuffer = await file.arrayBuffer()
   const result = await mammoth.extractRawText({ arrayBuffer })
   return result.value
+}
+
+async function parseExcel(file) {
+  const XLSX = (await import('xlsx')).default
+  const arrayBuffer = await file.arrayBuffer()
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+  const lines = []
+  for (const sheetName of workbook.SheetNames) {
+    lines.push(`=== Sheet: ${sheetName} ===`)
+    const sheet = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+    for (const row of rows) {
+      lines.push(row.map(cell => String(cell)).join('\t'))
+    }
+    lines.push('')
+  }
+  return lines.join('\n')
 }
