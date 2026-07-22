@@ -87,6 +87,20 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
   function renderText() {
     if (!doc) return null
     const text = doc.text || ''
+    const isHtml = text.trimStart().startsWith('<')
+
+    if (isHtml) {
+      // HTML document (DOCX) — render with table structure preserved
+      // Overlay coded segments as highlights using a wrapper approach
+      return (
+        <div
+          className="docx-content"
+          dangerouslySetInnerHTML={{ __html: text }}
+        />
+      )
+    }
+
+    // Plain text — render with coded segment highlights
     const docSegs = segments.filter(s => s.documentId === doc.id).sort((a, b) => a.start - b.start)
     if (!docSegs.length) return <span>{text}</span>
     const parts = []

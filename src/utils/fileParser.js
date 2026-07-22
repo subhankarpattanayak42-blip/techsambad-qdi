@@ -37,7 +37,8 @@ async function parsePDF(file) {
 async function parseDOCX(file) {
   const mammoth = (await import('mammoth')).default
   const arrayBuffer = await file.arrayBuffer()
-  const result = await mammoth.extractRawText({ arrayBuffer })
+  // Use convertToHtml to preserve tables, headings, bold etc.
+  const result = await mammoth.convertToHtml({ arrayBuffer })
   return result.value
 }
 
