@@ -1,11 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
+import { useAI } from '../hooks/useAI'
 
 export default function DocumentViewer({ document: doc, segments, codes, onAddSegment, onDeleteSegment, onUpdateSegment, pendingSelection, onSelectionChange }) {
   const [memoEdit, setMemoEdit] = useState(null)
   const [flash, setFlash] = useState(null)
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [aiError, setAiError] = useState(null)
   const containerRef = useRef()
+  const { suggestCodes, loading: aiLoading } = useAI()
 
   useEffect(() => { onSelectionChange(null) }, [doc?.id])
+
+  // Clear AI suggestions when selection changes
+  useEffect(() => {
+    if (!pendingSelection) {
+      setAiSuggestions([])
+      setAiError(null)
+    }
+  }, [pendingSelection])
 
   function handleMouseUp() {
     setTimeout(() => {
@@ -27,7 +39,6 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
         end = rEnd.toString().length
       } catch { end = start + text.length }
 
-      // Keep selection visible and notify parent
       onSelectionChange({ text, start, end })
     }, 10)
   }
@@ -37,14 +48,38 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     onAddSegment(doc.id, pendingSelection.text, codeId, pendingSelection.start, pendingSelection.end)
     onSelectionChange(null)
     window.getSelection()?.removeAllRanges()
+    setAiSuggestions([])
     setFlash({ text: pendingSelection.text.slice(0, 40), codeName })
     setTimeout(() => setFlash(null), 2500)
   }
 
-  // Expose assignCode so parent (CodeManager) can call it
   useEffect(() => {
     if (onSelectionChange.__setAssign) onSelectionChange.__setAssign(assignCode)
   })
+
+  async function handleAISuggest() {
+    if (!pendingSelection) return
+    setAiError(null)
+    setAiSuggestions([])
+    try {
+      const suggestions = await suggestCodes(pendingSelection.text, codes)
+      setAiSuggestions(suggestions)
+    } catch (e) {
+      setAiError(e.message)
+    }
+  }
+
+  function applyAISuggestion(suggestion) {
+    // Find existing code by name (case-insensitive)
+    const existing = codes.find(c => c.name.toLowerCase() === suggestion.code.toLowerCase())
+    if (existing) {
+      assignCode(existing.id, existing.name, existing.color)
+    } else {
+      // Show suggestion text in status — user needs to create the code first
+      setAiError(`Code "${suggestion.code}" doesn't exist yet. Create it in the Codes panel first, then assign.`)
+    }
+    setAiSuggestions([])
+  }
 
   function renderText() {
     if (!doc) return null
@@ -84,21 +119,59 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     </div>
   )
 
+  const hasApiKey = !!localStorage.getItem('qdi_openrouter_api_key')
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Status bar */}
-      <div className="px-3 py-2 border-b bg-white flex items-center gap-2 flex-shrink-0 min-h-[36px]">
+      <div className="px-3 py-2 border-b bg-white flex items-center gap-2 flex-shrink-0 flex-wrap min-h-[40px]">
         <span className="text-xs font-semibold text-gray-600 truncate">{doc.name}</span>
         <span className="text-xs text-gray-400">·</span>
         <span className="text-xs text-gray-400">{segments.filter(s => s.documentId === doc.id).length} segments</span>
+
         {pendingSelection ? (
-          <span className="ml-auto text-xs bg-blue-600 text-white px-3 py-1 rounded-full font-semibold animate-pulse">
-            "{pendingSelection.text.slice(0, 30)}{pendingSelection.text.length > 30 ? '…' : ''}" — now click a code →
-          </span>
+          <>
+            <span className="ml-2 text-xs bg-blue-600 text-white px-3 py-1 rounded-full font-semibold">
+              "{pendingSelection.text.slice(0, 30)}{pendingSelection.text.length > 30 ? '…' : ''}" — click a code →
+            </span>
+            {hasApiKey && (
+              <button
+                onClick={handleAISuggest}
+                disabled={aiLoading}
+                className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full font-semibold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1 transition">
+                {aiLoading ? '⏳ Thinking…' : '✨ AI Suggest'}
+              </button>
+            )}
+          </>
         ) : (
-          <span className="ml-auto text-xs text-gray-400">Select text, then click a code in the right panel →</span>
+          <span className="ml-auto text-xs text-gray-400">Select text, then click a code →</span>
         )}
       </div>
+
+      {/* AI Suggestions bar */}
+      {aiSuggestions.length > 0 && (
+        <div className="px-3 py-2 border-b bg-purple-50 flex items-start gap-2 flex-shrink-0 flex-wrap">
+          <span className="text-xs font-semibold text-purple-700 self-center">✨ AI suggests:</span>
+          {aiSuggestions.map((s, i) => (
+            <button key={i}
+              onClick={() => applyAISuggestion(s)}
+              title={s.reason}
+              className="text-xs bg-white border border-purple-300 text-purple-800 px-2.5 py-1 rounded-full hover:bg-purple-100 transition font-medium">
+              {s.code}
+            </button>
+          ))}
+          <button onClick={() => setAiSuggestions([])}
+            className="text-xs text-gray-400 hover:text-gray-600 ml-auto self-center">✕</button>
+        </div>
+      )}
+
+      {/* AI error */}
+      {aiError && (
+        <div className="px-3 py-2 border-b bg-red-50 flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs text-red-600">{aiError}</span>
+          <button onClick={() => setAiError(null)} className="text-xs text-gray-400 hover:text-gray-600 ml-auto">✕</button>
+        </div>
+      )}
 
       {/* Flash */}
       {flash && (
