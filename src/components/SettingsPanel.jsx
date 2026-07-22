@@ -1,9 +1,10 @@
 import { useState } from 'react'
 
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash'
+const DEFAULT_MODEL = 'deepseek/deepseek-chat'
 
 const SUGGESTED_MODELS = [
-  { id: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash — Default' },
+  { id: 'deepseek/deepseek-chat', label: 'DeepSeek V3 (Latest) — Default' },
+  { id: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
   { id: 'deepseek/deepseek-chat-v3-0324:free', label: 'DeepSeek V3 0324 (Free)' },
   { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free)' },
   { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)' },

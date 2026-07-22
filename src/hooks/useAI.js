@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash'
+const DEFAULT_MODEL = 'deepseek/deepseek-chat'
 
 export function useAI() {
   const [loading, setLoading] = useState(false)
@@ -33,7 +33,9 @@ export function useAI() {
       })
       const data = await resp.json()
       if (data.error) throw new Error(data.error.message)
-      const raw = data.choices[0].message.content.trim()
+      const content = data.choices?.[0]?.message?.content
+      if (!content) throw new Error('Model returned an empty response. Try again or switch to a different model in Settings.')
+      const raw = content.trim()
       const match = raw.match(/\[[\s\S]*\]/)
       return match ? JSON.parse(match[0]) : []
     } finally {
