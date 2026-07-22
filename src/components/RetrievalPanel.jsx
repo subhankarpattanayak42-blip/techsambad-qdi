@@ -77,21 +77,22 @@ export default function RetrievalPanel({ segments, codes, documents, memos, onAd
         const re = new RegExp(pattern, flags)
         let m
         while ((m = re.exec(text)) !== null) {
-          const start = Math.max(0, m.index - 80)
-          const end = Math.min(text.length, m.index + m[0].length + 80)
+          // Find the full line containing the match
+          const lineStart = text.lastIndexOf('\n', m.index - 1) + 1
+          const lineEndRaw = text.indexOf('\n', m.index)
+          const lineEnd = lineEndRaw === -1 ? text.length : lineEndRaw
+          const lineText = text.slice(lineStart, lineEnd).trim()
           matches.push({
-            // rowId unique per keyword hit
             segId: `kw_${doc.id}_${m.index}`,
             docId: doc.id,
             docName: doc.name,
             codeName: '—',
-            text: (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : ''),
-            // store exact match boundaries for segment creation
-            exactText: m[0],
-            exactStart: m.index,
-            exactEnd: m.index + m[0].length,
-            start: m.index,
-            end: m.index + m[0].length,
+            text: lineText,
+            exactText: lineText,
+            exactStart: lineStart,
+            exactEnd: lineEnd,
+            start: lineStart,
+            end: lineEnd,
             highlight: m[0],
             memoType: '', memoContent: '',
             isKeywordHit: true,
