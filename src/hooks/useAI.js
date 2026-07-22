@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324:free'
+const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash'
 
 export function useAI() {
   const [loading, setLoading] = useState(false)
