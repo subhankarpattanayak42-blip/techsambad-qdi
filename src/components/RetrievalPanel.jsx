@@ -10,7 +10,7 @@ const MODES = [
   { id: 'memo', label: '🪞 By Memo Type' },
 ]
 
-export default function RetrievalPanel({ segments, codes, documents, memos }) {
+export default function RetrievalPanel({ segments, codes, documents, memos, onAddSegment, onUpdateSegment }) {
   const [mode, setMode] = useState('code')
 
   // By Code
@@ -24,7 +24,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
   // Co-occurrence
   const [coCode1, setCoCode1] = useState('')
   const [coCode2, setCoCode2] = useState('')
-  const [coScope, setCoScope] = useState('document') // 'document' | 'proximity'
+  const [coScope, setCoScope] = useState('document')
   const [coProximity, setCoProximity] = useState(200)
 
   // Sequence
@@ -33,6 +33,11 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
 
   // Memo type
   const [memoType, setMemoType] = useState('')
+
+  // Auto-coding
+  const [checkedRows, setCheckedRows] = useState(new Set())
+  const [targetCodeId, setTargetCodeId] = useState('')
+  const [assignStatus, setAssignStatus] = useState(null) // null | 'assigning' | 'done'
 
   const codeMap = useMemo(() => Object.fromEntries(codes.map(c => [c.id, c])), [codes])
   const docMap = useMemo(() => Object.fromEntries(documents.map(d => [d.id, d])), [documents])
@@ -46,9 +51,11 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
   // ── Results computation ──────────────────────────────────────────────────
 
   const results = useMemo(() => {
+    setCheckedRows(new Set())
+    setAssignStatus(null)
+
     if (mode === 'code') {
       if (!selectedCodes.length) return []
-      // Include child codes of selected themes
       const allIds = new Set()
       for (const id of selectedCodes) {
         allIds.add(id)
@@ -64,7 +71,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
       return documents.flatMap(doc => {
         const text = doc.text || ''
         const matches = []
-        let flags = 'g' + (caseSensitive ? '' : 'i')
+        const flags = 'g' + (caseSensitive ? '' : 'i')
         let pattern = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         if (wholeWord) pattern = `\\b${pattern}\\b`
         const re = new RegExp(pattern, flags)
@@ -73,13 +80,21 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
           const start = Math.max(0, m.index - 80)
           const end = Math.min(text.length, m.index + m[0].length + 80)
           matches.push({
+            // rowId unique per keyword hit
+            segId: `kw_${doc.id}_${m.index}`,
+            docId: doc.id,
             docName: doc.name,
             codeName: '—',
             text: (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : ''),
+            // store exact match boundaries for segment creation
+            exactText: m[0],
+            exactStart: m.index,
+            exactEnd: m.index + m[0].length,
             start: m.index,
             end: m.index + m[0].length,
             highlight: m[0],
             memoType: '', memoContent: '',
+            isKeywordHit: true,
           })
         }
         return matches
@@ -101,7 +116,6 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
           for (const s of [...d1, ...d2]) rows.push(toRow(s))
         }
       } else {
-        // Proximity: both codes within N characters
         for (const s1 of segs1) {
           for (const s2 of segs2.filter(s => s.documentId === s1.documentId)) {
             const dist = Math.min(Math.abs(s1.start - s2.end), Math.abs(s2.start - s1.end))
@@ -112,7 +126,6 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
           }
         }
       }
-      // Deduplicate
       const seen = new Set()
       return rows.filter(r => { const k = r.segId; if (seen.has(k)) return false; seen.add(k); return true })
     }
@@ -125,7 +138,6 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
         const s1segs = docSegs.filter(s => s.codeId === seqCode1)
         const s2segs = docSegs.filter(s => s.codeId === seqCode2)
         for (const s1 of s1segs) {
-          // Find any s2 that starts AFTER s1 ends
           const following = s2segs.filter(s2 => s2.start > s1.end)
           if (following.length) {
             rows.push({ ...toRow(s1), sequenceRole: `A: ${codeMap[seqCode1]?.name}` })
@@ -145,6 +157,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
         const code = seg ? codeMap[seg.codeId] : null
         return {
           segId: m.id,
+          docId: seg?.documentId || m.documentId,
           docName: doc?.name || '—',
           codeName: code ? getCodeLabel(code) : '—',
           text: seg?.text || '(project-level memo)',
@@ -158,6 +171,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
     }
 
     return []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selectedCodes, keyword, caseSensitive, wholeWord, coCode1, coCode2, coScope, coProximity, seqCode1, seqCode2, memoType, segments, codes, documents, memos])
 
   function toRow(s) {
@@ -166,6 +180,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
     const segMemo = memos.find(m => m.segmentId === s.id)
     return {
       segId: s.id,
+      docId: s.documentId,
       docName: doc?.name || '—',
       codeName: code ? getCodeLabel(code) : '—',
       text: s.text,
@@ -188,6 +203,50 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
 
   function toggleCode(id) {
     setSelectedCodes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  // ── Checkbox logic ───────────────────────────────────────────────────────
+
+  const allChecked = results.length > 0 && checkedRows.size === results.length
+  const someChecked = checkedRows.size > 0 && !allChecked
+
+  function toggleAll() {
+    if (allChecked) {
+      setCheckedRows(new Set())
+    } else {
+      setCheckedRows(new Set(results.map((_, i) => i)))
+    }
+  }
+
+  function toggleRow(i) {
+    setCheckedRows(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  // ── Auto-assign logic ────────────────────────────────────────────────────
+
+  async function handleAssignToCode() {
+    if (!targetCodeId || checkedRows.size === 0) return
+    setAssignStatus('assigning')
+
+    const selected = [...checkedRows].map(i => results[i])
+
+    for (const row of selected) {
+      if (row.isKeywordHit) {
+        // Create a new segment from the keyword match
+        await onAddSegment(row.docId, row.exactText, targetCodeId, row.exactStart, row.exactEnd)
+      } else {
+        // Re-code existing segment
+        await onUpdateSegment(row.segId, { codeId: targetCodeId })
+      }
+    }
+
+    setAssignStatus('done')
+    setCheckedRows(new Set())
+    setTimeout(() => setAssignStatus(null), 2500)
   }
 
   const themes = codes.filter(c => !c.parentId)
@@ -321,7 +380,7 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
       {/* Right: results */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Results toolbar */}
-        <div className="px-4 py-2 border-b bg-white flex items-center gap-3 flex-shrink-0">
+        <div className="px-4 py-2 border-b bg-white flex items-center gap-3 flex-shrink-0 flex-wrap">
           <span className="text-sm font-bold text-gray-800">{results.length} result{results.length !== 1 ? 's' : ''}</span>
           {freqSummary.length > 0 && (
             <div className="flex gap-1 flex-wrap">
@@ -341,6 +400,35 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
           )}
         </div>
 
+        {/* Auto-coding toolbar — shown when rows are checked */}
+        {checkedRows.size > 0 && (
+          <div className="px-4 py-2 border-b bg-amber-50 flex items-center gap-3 flex-shrink-0 flex-wrap">
+            <span className="text-xs font-semibold text-amber-800">
+              {checkedRows.size} row{checkedRows.size !== 1 ? 's' : ''} selected
+            </span>
+            <select
+              value={targetCodeId}
+              onChange={e => setTargetCodeId(e.target.value)}
+              className="text-xs border rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-amber-400 min-w-[160px]">
+              <option value="">Assign to code…</option>
+              {codes.map(c => (
+                <option key={c.id} value={c.id}>{getCodeLabel(c)}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleAssignToCode}
+              disabled={!targetCodeId || assignStatus === 'assigning'}
+              className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
+              {assignStatus === 'assigning' ? '⏳ Assigning…' : '🏷 Assign to Code'}
+            </button>
+            {assignStatus === 'done' && (
+              <span className="text-xs text-green-700 font-semibold">✅ Done! Segments coded.</span>
+            )}
+            <button onClick={() => setCheckedRows(new Set())}
+              className="text-xs text-gray-400 hover:text-gray-600 ml-auto">Clear selection</button>
+          </div>
+        )}
+
         {/* Quotation matrix table */}
         <div className="flex-1 overflow-auto">
           {results.length === 0 ? (
@@ -359,6 +447,15 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0 bg-[#00335B] text-white">
                 <tr>
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked }}
+                      onChange={toggleAll}
+                      className="rounded cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2 font-semibold w-32">Document</th>
                   <th className="text-left px-3 py-2 font-semibold w-36">Code / Theme</th>
                   {mode === 'sequence' && <th className="text-left px-3 py-2 font-semibold w-20">Role</th>}
@@ -370,8 +467,14 @@ export default function RetrievalPanel({ segments, codes, documents, memos }) {
               <tbody>
                 {results.map((r, i) => {
                   const memoStyle = r.memoType ? MEMO_TYPES.find(m => m.type === r.memoType) : null
+                  const isChecked = checkedRows.has(i)
                   return (
-                    <tr key={r.segId + i} className={`border-b ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition`}>
+                    <tr key={r.segId + i}
+                      onClick={() => toggleRow(i)}
+                      className={`border-b cursor-pointer transition ${isChecked ? 'bg-amber-50' : i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}`}>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleRow(i)} className="rounded cursor-pointer" />
+                      </td>
                       <td className="px-3 py-2 text-gray-500 truncate max-w-[8rem]">{r.docName}</td>
                       <td className="px-3 py-2">
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold"

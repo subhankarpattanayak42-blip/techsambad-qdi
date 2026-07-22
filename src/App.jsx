@@ -263,7 +263,7 @@ export default function App() {
       )}
 
       {view === 'search' && <SearchPanel segments={segments} codes={codes} documents={documents} onSelectDocument={id => { setActiveDocId(id); setView('documents') }} />}
-      {view === 'retrieval' && <RetrievalPanel segments={segments} codes={codes} documents={documents} memos={memos} />}
+      {view === 'retrieval' && <RetrievalPanel segments={segments} codes={codes} documents={documents} memos={memos} onAddSegment={addSegment} onUpdateSegment={updateSegment} />}
       {view === 'analysis' && <AnalysisPanel segments={segments} codes={codes} documents={documents} />}
       {view === 'export' && <ExportPanel project={activeProject} segments={segments} codes={codes} documents={documents} />}
       {view === 'settings' && <SettingsPanel />}
