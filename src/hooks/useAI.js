@@ -27,7 +27,7 @@ export function useAI() {
           max_tokens: 300,
           messages: [{
             role: 'user',
-            content: `You are a qualitative data analysis assistant. A researcher has selected the following text segment:\n\n"${selectedText}"\n\nExisting codes in their project: ${codeList}\n\nSuggest 3 qualitative codes for this segment. Prefer existing codes if they fit. Format your response as a JSON array of objects: [{"code": "Code Name", "reason": "brief reason"}]. Return ONLY the JSON array, no other text.`
+            content: `You are an expert qualitative data analyst. A researcher has selected this text segment for coding:\n\n"${selectedText}"\n\nExisting codes in their project (for reference only): ${codeList}\n\nYour task: Suggest 3 qualitative codes that BEST capture the meaning, theme, or concept in the selected text. \n- ONLY reuse an existing code if it is a genuinely strong fit for this specific text.\n- Otherwise, create NEW, precise code names that reflect what this text is actually about.\n- Codes should be specific and descriptive (e.g. "Knowledge Gap", "Resistance to Change", "Cost Justification") — not generic.\n- Do NOT just list the existing codes back.\n\nRespond ONLY with a JSON array: [{"code": "Code Name", "reason": "one sentence why this fits"}]`
           }]
         })
       })
