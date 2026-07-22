@@ -1,25 +1,29 @@
 import { useState } from 'react'
 
+const DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324:free'
+
 export function useAI() {
   const [loading, setLoading] = useState(false)
 
   async function suggestCodes(selectedText, existingCodes) {
-    const apiKey = localStorage.getItem('qdi_claude_api_key')
-    if (!apiKey) throw new Error('No API key set. Please add your Claude API key in Settings.')
+    const apiKey = localStorage.getItem('qdi_openrouter_api_key')
+    if (!apiKey) throw new Error('No API key set. Please add your OpenRouter API key in Settings.')
+
+    const model = localStorage.getItem('qdi_openrouter_model') || DEFAULT_MODEL
 
     setLoading(true)
     try {
       const codeList = existingCodes.map(c => c.name).join(', ') || 'none yet'
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://subhankarpattanayak42-blip.github.io/techsambad-qdi/',
+          'X-Title': 'TechSambad QDI',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model,
           max_tokens: 300,
           messages: [{
             role: 'user',
@@ -29,7 +33,7 @@ export function useAI() {
       })
       const data = await resp.json()
       if (data.error) throw new Error(data.error.message)
-      const raw = data.content[0].text.trim()
+      const raw = data.choices[0].message.content.trim()
       const match = raw.match(/\[[\s\S]*\]/)
       return match ? JSON.parse(match[0]) : []
     } finally {
