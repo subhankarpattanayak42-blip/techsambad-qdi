@@ -29,9 +29,28 @@ async function parsePDF(file) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const content = await page.getTextContent()
-    pages.push(content.items.map(item => item.str).join(' '))
+    const viewport = page.getViewport({ scale: 1 })
+
+    // Group text items into lines by their Y position
+    const lineMap = {}
+    for (const item of content.items) {
+      if (!item.str) continue
+      // Round Y to nearest 2px to group items on the same line
+      const y = Math.round((viewport.height - item.transform[5]) / 2) * 2
+      if (!lineMap[y]) lineMap[y] = []
+      lineMap[y].push({ x: item.transform[4], str: item.str })
+    }
+
+    // Sort lines top-to-bottom, items left-to-right within each line
+    const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => a - b)
+    const lines = sortedYs.map(y => {
+      const items = lineMap[y].sort((a, b) => a.x - b.x)
+      return items.map(it => it.str).join('  ')
+    })
+
+    pages.push(lines.join('\n'))
   }
-  return pages.join('\n\n')
+  return pages.join('\n\n--- Page Break ---\n\n')
 }
 
 async function parseDOCX(file) {
