@@ -75,11 +75,19 @@ export default function SettingsPanel() {
 
       <div className="bg-white rounded-lg border p-4 max-w-md mt-4">
         <h3 className="font-semibold text-gray-800 mb-1 text-sm">ℹ️ About TechSambad QDI</h3>
-        <p className="text-xs text-gray-500 leading-relaxed">
+        <p className="text-xs text-gray-500 leading-relaxed mb-3">
           TechSambad QDI (Qualitative Data Intelligence) is a browser-based qualitative data analysis tool inspired by QDA Miner.
           All your data is stored locally in your browser — nothing is uploaded to any server.<br /><br />
           Built by Subhankar Pattanayak · AI powered by OpenRouter
         </p>
+        <a href="https://www.techsambad.com" target="_blank" rel="noreferrer"
+          className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition group">
+          <div className="w-9 h-9 bg-[#00335B] rounded-lg flex items-center justify-center text-[#F0AB00] font-black text-xs flex-shrink-0">TS</div>
+          <div>
+            <p className="text-xs font-bold text-gray-800 group-hover:text-[#00335B]">✦ TechSambad — The AI signals that matter</p>
+            <p className="text-[10px] text-gray-500">Weekly AI intelligence for forward-thinking professionals · www.techsambad.com</p>
+          </div>
+        </a>
       </div>
     </div>
   )
