@@ -226,13 +226,32 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
       {/* Memo modal */}
       {memoEdit && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-5 w-96 shadow-xl">
-            <h3 className="font-bold text-gray-800 mb-1 text-sm">Segment Options</h3>
+          <div className="bg-white rounded-xl p-5 w-96 shadow-2xl">
+            <h3 className="font-bold text-gray-800 mb-1 text-sm">Memo for Segment</h3>
             <p className="text-xs text-gray-500 mb-1">Code: <strong>{codes.find(c => c.id === memoEdit.codeId)?.name || '—'}</strong></p>
-            <p className="text-xs text-gray-500 mb-3 italic">"{memoEdit.text.slice(0, 80)}{memoEdit.text.length > 80 ? '…' : ''}"</p>
+            <p className="text-xs text-gray-400 mb-3 italic">"{memoEdit.text.slice(0, 80)}{memoEdit.text.length > 80 ? '…' : ''}"</p>
+
+            {/* Memo type selector */}
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {['Reflection','Review','Note','Question','Summary'].map(type => {
+                const typeColors = { Reflection:'#818CF8', Review:'#F59E0B', Note:'#10B981', Question:'#EF4444', Summary:'#0EA5E9' }
+                const typeBgs = { Reflection:'#EEF2FF', Review:'#FFFBEB', Note:'#ECFDF5', Question:'#FEF2F2', Summary:'#F0F9FF' }
+                const current = memoEdit.memoType || 'Note'
+                const isSelected = current === type
+                return (
+                  <button key={type}
+                    onClick={() => setMemoEdit(m => ({ ...m, memoType: type }))}
+                    className="text-xs px-2 py-0.5 rounded-full border font-semibold transition"
+                    style={{ backgroundColor: isSelected ? typeColors[type] : typeBgs[type], color: isSelected ? 'white' : typeColors[type], borderColor: typeColors[type] }}>
+                    {type}
+                  </button>
+                )
+              })}
+            </div>
+
             <textarea autoFocus defaultValue={memoEdit.memo} id="qdi-memo-input" rows={4}
               className="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-              placeholder="Add a note about this segment…" />
+              placeholder="Write your memo here…" />
             <div className="flex gap-2 mt-3">
               <button onClick={() => { onDeleteSegment(memoEdit.id); setMemoEdit(null) }}
                 className="text-sm text-red-500 px-3 py-1 hover:bg-red-50 rounded border border-red-200">✕ Remove</button>
@@ -240,7 +259,7 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
               <button onClick={() => setMemoEdit(null)} className="text-sm text-gray-500 px-3 py-1 hover:bg-gray-100 rounded">Cancel</button>
               <button onClick={() => {
                 const val = window.document.getElementById('qdi-memo-input')?.value || ''
-                onUpdateSegment(memoEdit.id, { memo: val })
+                onUpdateSegment(memoEdit.id, { memo: val, memoType: memoEdit.memoType || 'Note' })
                 setMemoEdit(null)
               }} className="text-sm bg-[#00335B] text-white px-4 py-1 rounded hover:bg-blue-800">Save</button>
             </div>
@@ -292,7 +311,7 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
                 className="text-sm text-gray-500 px-3 py-1.5 hover:bg-gray-100 rounded">Skip</button>
               <button onClick={() => {
                 const val = window.document.getElementById('qdi-quick-memo-input')?.value || ''
-                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val })
+                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val, memoType: quickMemo.memoType || 'Note' })
                 setQuickMemo(null)
               }} className="text-sm bg-[#00335B] text-white px-4 py-1.5 rounded hover:bg-blue-800 font-semibold">
                 Save Memo
