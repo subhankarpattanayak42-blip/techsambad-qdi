@@ -112,20 +112,32 @@ export default function DocumentViewer({ document: doc, segments, codes, memos, 
       for (const seg of docSegs) {
         const code = codes.find(c => c.id === seg.codeId)
         const color = code?.color || '#FCD34D'
-        // Normalize whitespace in seg.text to match HTML (collapse newlines/multiple spaces)
-        const normalizedSeg = seg.text.replace(/\s+/g, ' ').trim()
-        const escapedText = normalizedSeg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const re = new RegExp(escapedText, 'gi')
-        // Also try matching against HTML with tags stripped
-        const htmlStripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-        if (re.test(htmlStripped) || html.includes(seg.text)) {
-          // Match in raw HTML (single-line segments)
-          const rawRe = new RegExp(seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
-          if (html.includes(seg.text)) {
-            html = html.replace(rawRe, `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${seg.text}</span>`)
-          } else {
-            // Multi-line: match normalized
-            html = html.replace(re, match => `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${match}</span>`)
+
+        // Try exact match first (single-line segments)
+        const exactEscaped = seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        if (html.includes(seg.text)) {
+          html = html.replace(
+            new RegExp(exactEscaped, 'g'),
+            `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${seg.text}</span>`
+          )
+          continue
+        }
+
+        // Multi-line: the selected text has \n but HTML has </p><p> or <br> between lines.
+        // Split seg.text into lines, find the first and last line in HTML, wrap each line.
+        const lines = seg.text.split(/\n+/).map(l => l.trim()).filter(Boolean)
+        if (lines.length > 1) {
+          // Wrap each line individually with the same data-seg
+          let matched = false
+          for (const line of lines) {
+            const lineEscaped = line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            if (html.includes(line)) {
+              html = html.replace(
+                new RegExp(lineEscaped, 'g'),
+                `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${line}</span>`
+              )
+              matched = true
+            }
           }
         }
       }
