@@ -48,11 +48,25 @@ export default function DocumentViewer({ document: doc, segments, codes, memos, 
 
   function assignCode(codeId, codeName, color) {
     if (!pendingSelection) return
+    // Check for duplicate — same text + same code already exists in this doc
+    const duplicate = segments.find(s =>
+      s.documentId === doc.id &&
+      s.codeId === codeId &&
+      s.text === pendingSelection.text
+    )
+    if (duplicate) {
+      // Open the existing segment's memo instead of creating a new one
+      const existingMemo = memos?.find(m => m.segmentId === duplicate.id) || null
+      setMemoEdit({ ...duplicate, existingMemo, memoType: existingMemo?.type || 'Note' })
+      onSelectionChange(null)
+      window.getSelection()?.removeAllRanges()
+      setAiSuggestions([])
+      return
+    }
     const seg = onAddSegment(doc.id, pendingSelection.text, codeId, pendingSelection.start, pendingSelection.end)
     onSelectionChange(null)
     window.getSelection()?.removeAllRanges()
     setAiSuggestions([])
-    // Open quick memo prompt — seg is a promise, handle accordingly
     Promise.resolve(seg).then(s => {
       setQuickMemo({ segId: s.id, text: pendingSelection.text, codeName, color })
     })
@@ -94,23 +108,28 @@ export default function DocumentViewer({ document: doc, segments, codes, memos, 
     const docSegs = segments.filter(s => s.documentId === doc.id).sort((a, b) => a.start - b.start)
 
     if (isHtml) {
-      // For HTML docs, inject placeholder markers then replace with React elements
-      // Step 1: inject unique placeholders into the HTML string
       let html = text
-      const segOrder = []
       for (const seg of docSegs) {
         const code = codes.find(c => c.id === seg.codeId)
         const color = code?.color || '#FCD34D'
-        const placeholder = `__SEG_${seg.id}__`
-        const escapedText = seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const re = new RegExp(escapedText, 'g')
-        if (html.includes(seg.text)) {
-          html = html.replace(re, `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${seg.text}</span>`)
-          segOrder.push(seg.id)
+        // Normalize whitespace in seg.text to match HTML (collapse newlines/multiple spaces)
+        const normalizedSeg = seg.text.replace(/\s+/g, ' ').trim()
+        const escapedText = normalizedSeg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const re = new RegExp(escapedText, 'gi')
+        // Also try matching against HTML with tags stripped
+        const htmlStripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+        if (re.test(htmlStripped) || html.includes(seg.text)) {
+          // Match in raw HTML (single-line segments)
+          const rawRe = new RegExp(seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+          if (html.includes(seg.text)) {
+            html = html.replace(rawRe, `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${seg.text}</span>`)
+          } else {
+            // Multi-line: match normalized
+            html = html.replace(re, match => `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${match}</span>`)
+          }
         }
       }
 
-      // Step 2: render HTML and attach click handler via event delegation
       return (
         <div
           className="docx-content"
