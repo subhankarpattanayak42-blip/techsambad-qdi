@@ -5,7 +5,6 @@ const PRESET_COLORS = ['#FCD34D','#86EFAC','#93C5FD','#F9A8D4','#A5B4FC','#6EE7B
 
 export default function DocumentViewer({ document: doc, segments, codes, onAddSegment, onDeleteSegment, onUpdateSegment, onAddCode, pendingSelection, onSelectionChange }) {
   const [memoEdit, setMemoEdit] = useState(null)
-  const [flash, setFlash] = useState(null)
   const [aiSuggestions, setAiSuggestions] = useState([])
   const [aiError, setAiError] = useState(null)
   const containerRef = useRef()
@@ -45,12 +44,19 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     }, 10)
   }
 
+  const [quickMemo, setQuickMemo] = useState(null) // { segId, text, codeName, color }
+
   function assignCode(codeId, codeName, color) {
     if (!pendingSelection) return
-    onAddSegment(doc.id, pendingSelection.text, codeId, pendingSelection.start, pendingSelection.end)
+    const seg = onAddSegment(doc.id, pendingSelection.text, codeId, pendingSelection.start, pendingSelection.end)
     onSelectionChange(null)
     window.getSelection()?.removeAllRanges()
     setAiSuggestions([])
+    // Open quick memo prompt — seg is a promise, handle accordingly
+    Promise.resolve(seg).then(s => {
+      setQuickMemo({ segId: s.id, text: pendingSelection.text, codeName, color })
+    })
+  }
     setFlash({ text: pendingSelection.text.slice(0, 40), codeName })
     setTimeout(() => setFlash(null), 2500)
   }
@@ -213,11 +219,6 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
       )}
 
       {/* Flash */}
-      {flash && (
-        <div className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium flex-shrink-0">
-          ✓ Tagged "{flash.text}{flash.text?.length >= 40 ? '…' : ''}" → <strong>{flash.codeName}</strong>
-        </div>
-      )}
 
       {/* Text */}
       <div ref={containerRef} onMouseUp={handleMouseUp}
@@ -246,6 +247,61 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
                 setMemoEdit(null)
               }} className="text-sm bg-[#00335B] text-white px-4 py-1 rounded hover:bg-blue-800">Save</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick memo modal — appears immediately after code assignment */}
+      {quickMemo && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-5 w-96 shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: quickMemo.color }} />
+              <h3 className="font-bold text-gray-800 text-sm">Add Memo for <span style={{ color: quickMemo.color }}>{quickMemo.codeName}</span></h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-3 italic">"{quickMemo.text.slice(0, 80)}{quickMemo.text.length > 80 ? '…' : ''}"</p>
+
+            {/* Memo type selector */}
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {['Reflection','Review','Note','Question','Summary'].map(type => {
+                const colors = { Reflection:'#818CF8', Review:'#F59E0B', Note:'#10B981', Question:'#EF4444', Summary:'#0EA5E9' }
+                const bgs = { Reflection:'#EEF2FF', Review:'#FFFBEB', Note:'#ECFDF5', Question:'#FEF2F2', Summary:'#F0F9FF' }
+                const isSelected = (quickMemo.memoType || 'Note') === type
+                return (
+                  <button key={type}
+                    onClick={() => setQuickMemo(q => ({ ...q, memoType: type }))}
+                    className="text-xs px-2 py-0.5 rounded-full border font-semibold transition"
+                    style={{ backgroundColor: isSelected ? colors[type] : bgs[type], color: isSelected ? 'white' : colors[type], borderColor: colors[type] }}>
+                    {type}
+                  </button>
+                )
+              })}
+            </div>
+
+            <textarea
+              autoFocus
+              id="qdi-quick-memo-input"
+              rows={3}
+              placeholder="Write your memo here… (optional)"
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) {
+                const val = window.document.getElementById('qdi-quick-memo-input')?.value || ''
+                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val })
+                setQuickMemo(null)
+              }}}
+              className="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setQuickMemo(null)}
+                className="text-sm text-gray-500 px-3 py-1.5 hover:bg-gray-100 rounded">Skip</button>
+              <button onClick={() => {
+                const val = window.document.getElementById('qdi-quick-memo-input')?.value || ''
+                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val })
+                setQuickMemo(null)
+              }} className="text-sm bg-[#00335B] text-white px-4 py-1.5 rounded hover:bg-blue-800 font-semibold">
+                Save Memo
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 text-center">Ctrl+Enter to save · Skip to code without memo</p>
           </div>
         </div>
       )}
