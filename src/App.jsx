@@ -188,7 +188,7 @@ export default function App() {
           </div>
 
           {/* Code panel */}
-          <div className="w-48 border-l bg-white flex flex-col overflow-hidden flex-shrink-0">
+          <div className="w-64 border-l bg-white flex flex-col overflow-hidden flex-shrink-0">
             <CodeManager
               codes={codes}
               segments={segments}

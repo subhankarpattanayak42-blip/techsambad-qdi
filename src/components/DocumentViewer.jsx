@@ -88,20 +88,24 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     if (!doc) return null
     const text = doc.text || ''
     const isHtml = text.trimStart().startsWith('<')
+    const docSegs = segments.filter(s => s.documentId === doc.id).sort((a, b) => a.start - b.start)
 
     if (isHtml) {
-      // HTML document (DOCX) — render with table structure preserved
-      // Overlay coded segments as highlights using a wrapper approach
+      // For HTML docs, inject highlight spans by replacing exact segment text in the HTML
+      let html = text
+      for (const seg of docSegs) {
+        const code = codes.find(c => c.id === seg.codeId)
+        const color = code?.color || '#FCD34D'
+        const escapedText = seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const re = new RegExp(escapedText, 'g')
+        html = html.replace(re, `<mark style="background:${color};border-radius:3px;padding:1px 2px;" title="${code?.name || ''}">${seg.text}</mark>`)
+      }
       return (
-        <div
-          className="docx-content"
-          dangerouslySetInnerHTML={{ __html: text }}
-        />
+        <div className="docx-content" dangerouslySetInnerHTML={{ __html: html }} />
       )
     }
 
     // Plain text — render with coded segment highlights
-    const docSegs = segments.filter(s => s.documentId === doc.id).sort((a, b) => a.start - b.start)
     if (!docSegs.length) return <span>{text}</span>
     const parts = []
     let cursor = 0
