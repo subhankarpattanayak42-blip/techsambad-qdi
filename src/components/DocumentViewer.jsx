@@ -91,17 +91,35 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
     const docSegs = segments.filter(s => s.documentId === doc.id).sort((a, b) => a.start - b.start)
 
     if (isHtml) {
-      // For HTML docs, inject highlight spans by replacing exact segment text in the HTML
+      // For HTML docs, inject placeholder markers then replace with React elements
+      // Step 1: inject unique placeholders into the HTML string
       let html = text
+      const segOrder = []
       for (const seg of docSegs) {
         const code = codes.find(c => c.id === seg.codeId)
         const color = code?.color || '#FCD34D'
+        const placeholder = `__SEG_${seg.id}__`
         const escapedText = seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         const re = new RegExp(escapedText, 'g')
-        html = html.replace(re, `<mark style="background:${color};border-radius:3px;padding:1px 2px;" title="${code?.name || ''}">${seg.text}</mark>`)
+        if (html.includes(seg.text)) {
+          html = html.replace(re, `<span data-seg="${seg.id}" style="background:${color};border-radius:3px;padding:1px 2px;cursor:pointer;">${seg.text}</span>`)
+          segOrder.push(seg.id)
+        }
       }
+
+      // Step 2: render HTML and attach click handler via event delegation
       return (
-        <div className="docx-content" dangerouslySetInnerHTML={{ __html: html }} />
+        <div
+          className="docx-content"
+          dangerouslySetInnerHTML={{ __html: html }}
+          onClick={e => {
+            const el = e.target.closest('[data-seg]')
+            if (!el) return
+            const segId = el.getAttribute('data-seg')
+            const seg = docSegs.find(s => s.id === segId)
+            if (seg) setMemoEdit(seg)
+          }}
+        />
       )
     }
 
@@ -211,12 +229,16 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
       {memoEdit && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-5 w-96 shadow-xl">
-            <h3 className="font-bold text-gray-800 mb-1 text-sm">Edit Memo</h3>
-            <p className="text-xs text-gray-500 mb-3 italic">"{memoEdit.text.slice(0, 80)}"</p>
+            <h3 className="font-bold text-gray-800 mb-1 text-sm">Segment Options</h3>
+            <p className="text-xs text-gray-500 mb-1">Code: <strong>{codes.find(c => c.id === memoEdit.codeId)?.name || '—'}</strong></p>
+            <p className="text-xs text-gray-500 mb-3 italic">"{memoEdit.text.slice(0, 80)}{memoEdit.text.length > 80 ? '…' : ''}"</p>
             <textarea autoFocus defaultValue={memoEdit.memo} id="qdi-memo-input" rows={4}
               className="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-              placeholder="Add a note…" />
-            <div className="flex gap-2 mt-3 justify-end">
+              placeholder="Add a note about this segment…" />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { onDeleteSegment(memoEdit.id); setMemoEdit(null) }}
+                className="text-sm text-red-500 px-3 py-1 hover:bg-red-50 rounded border border-red-200">✕ Remove</button>
+              <div className="flex-1" />
               <button onClick={() => setMemoEdit(null)} className="text-sm text-gray-500 px-3 py-1 hover:bg-gray-100 rounded">Cancel</button>
               <button onClick={() => {
                 const val = window.document.getElementById('qdi-memo-input')?.value || ''
