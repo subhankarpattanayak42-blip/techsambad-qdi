@@ -176,10 +176,13 @@ export default function App() {
                   document={activeDoc}
                   segments={segments}
                   codes={codes}
+                  memos={memos}
                   onAddSegment={addSegment}
                   onDeleteSegment={deleteSegment}
                   onUpdateSegment={updateSegment}
                   onAddCode={addCode}
+                  onAddMemo={addMemo}
+                  onUpdateMemo={updateMemo}
                   pendingSelection={pendingSelection}
                   onSelectionChange={setPendingSelection}
                 />

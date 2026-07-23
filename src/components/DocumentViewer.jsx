@@ -3,7 +3,7 @@ import { useAI } from '../hooks/useAI'
 
 const PRESET_COLORS = ['#FCD34D','#86EFAC','#93C5FD','#F9A8D4','#A5B4FC','#6EE7B7','#FCA5A5','#67E8F9','#D8B4FE','#FB923C','#A3E635','#F472B6','#34D399','#60A5FA','#FBBF24']
 
-export default function DocumentViewer({ document: doc, segments, codes, onAddSegment, onDeleteSegment, onUpdateSegment, onAddCode, pendingSelection, onSelectionChange }) {
+export default function DocumentViewer({ document: doc, segments, codes, memos, onAddSegment, onDeleteSegment, onUpdateSegment, onAddCode, onAddMemo, onUpdateMemo, pendingSelection, onSelectionChange }) {
   const [memoEdit, setMemoEdit] = useState(null)
   const [aiSuggestions, setAiSuggestions] = useState([])
   const [aiError, setAiError] = useState(null)
@@ -120,7 +120,10 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
             if (!el) return
             const segId = el.getAttribute('data-seg')
             const seg = docSegs.find(s => s.id === segId)
-            if (seg) setMemoEdit(seg)
+            if (seg) {
+              const existingMemo = memos?.find(m => m.segmentId === seg.id) || null
+              setMemoEdit({ ...seg, existingMemo, memoType: existingMemo?.type || 'Note' })
+            }
           }}
         />
       )
@@ -143,7 +146,11 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
             <span className="font-bold text-gray-800">{code?.name || 'Unknown'}</span>
             {seg.memo && <span className="text-gray-500 italic">{seg.memo}</span>}
             <button className="text-blue-600 hover:underline text-left"
-              onClick={ev => { ev.stopPropagation(); setMemoEdit(seg) }}>✏ Edit memo</button>
+              onClick={ev => {
+                ev.stopPropagation()
+                const existingMemo = memos?.find(m => m.segmentId === seg.id) || null
+                setMemoEdit({ ...seg, existingMemo, memoType: existingMemo?.type || 'Note' })
+              }}>✏ Edit memo</button>
             <button className="text-red-500 hover:underline text-left"
               onClick={ev => { ev.stopPropagation(); onDeleteSegment(seg.id) }}>✕ Remove</button>
           </span>
@@ -249,17 +256,23 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
               })}
             </div>
 
-            <textarea autoFocus defaultValue={memoEdit.memo} id="qdi-memo-input" rows={4}
+            <textarea autoFocus defaultValue={memoEdit.existingMemo?.content || ''} id="qdi-memo-input" rows={4}
               className="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none"
               placeholder="Write your memo here…" />
             <div className="flex gap-2 mt-3">
               <button onClick={() => { onDeleteSegment(memoEdit.id); setMemoEdit(null) }}
-                className="text-sm text-red-500 px-3 py-1 hover:bg-red-50 rounded border border-red-200">✕ Remove</button>
+                className="text-sm text-red-500 px-3 py-1 hover:bg-red-50 rounded border border-red-200">✕ Remove Segment</button>
               <div className="flex-1" />
               <button onClick={() => setMemoEdit(null)} className="text-sm text-gray-500 px-3 py-1 hover:bg-gray-100 rounded">Cancel</button>
               <button onClick={() => {
                 const val = window.document.getElementById('qdi-memo-input')?.value || ''
-                onUpdateSegment(memoEdit.id, { memo: val, memoType: memoEdit.memoType || 'Note' })
+                if (val.trim()) {
+                  if (memoEdit.existingMemo) {
+                    onUpdateMemo(memoEdit.existingMemo.id, { content: val, type: memoEdit.memoType || 'Note' })
+                  } else {
+                    onAddMemo(val, memoEdit.memoType || 'Note', { segmentId: memoEdit.id, documentId: doc.id })
+                  }
+                }
                 setMemoEdit(null)
               }} className="text-sm bg-[#00335B] text-white px-4 py-1 rounded hover:bg-blue-800">Save</button>
             </div>
@@ -301,7 +314,7 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
               placeholder="Write your memo here… (optional)"
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) {
                 const val = window.document.getElementById('qdi-quick-memo-input')?.value || ''
-                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val })
+                if (val.trim()) onAddMemo(val, quickMemo.memoType || 'Note', { segmentId: quickMemo.segId, documentId: doc.id })
                 setQuickMemo(null)
               }}}
               className="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-3"
@@ -311,7 +324,7 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
                 className="text-sm text-gray-500 px-3 py-1.5 hover:bg-gray-100 rounded">Skip</button>
               <button onClick={() => {
                 const val = window.document.getElementById('qdi-quick-memo-input')?.value || ''
-                if (val.trim()) onUpdateSegment(quickMemo.segId, { memo: val, memoType: quickMemo.memoType || 'Note' })
+                if (val.trim()) onAddMemo(val, quickMemo.memoType || 'Note', { segmentId: quickMemo.segId, documentId: doc.id })
                 setQuickMemo(null)
               }} className="text-sm bg-[#00335B] text-white px-4 py-1.5 rounded hover:bg-blue-800 font-semibold">
                 Save Memo
