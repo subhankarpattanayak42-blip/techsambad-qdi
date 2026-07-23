@@ -57,9 +57,6 @@ export default function DocumentViewer({ document: doc, segments, codes, onAddSe
       setQuickMemo({ segId: s.id, text: pendingSelection.text, codeName, color })
     })
   }
-    setFlash({ text: pendingSelection.text.slice(0, 40), codeName })
-    setTimeout(() => setFlash(null), 2500)
-  }
 
   useEffect(() => {
     if (onSelectionChange.__setAssign) onSelectionChange.__setAssign(assignCode)
