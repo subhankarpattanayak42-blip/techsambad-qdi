@@ -26,27 +26,46 @@ async function parsePDF(file) {
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
   const pages = []
+
+  // pdf.js returns text items in reading order, with `hasEOL` marking line ends
+  // and `width`/`transform[4]` giving each glyph's horizontal geometry. Using
+  // that order plus geometric gap detection is far more robust than bucketing
+  // by Y position alone, which MERGES text columns (left+right of a two-column
+  // page share the same Y) and jumbles words. Preserving reading order keeps
+  // multi-column, tables, and mixed-layout PDFs readable.
+  const GAP_THRESHOLD = 1.5 // points — larger means a real word boundary
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const content = await page.getTextContent()
-    const viewport = page.getViewport({ scale: 1 })
 
-    // Group text items into lines by their Y position
-    const lineMap = {}
+    const lines = []
+    let buf = ''
+    let prevRight = null
+
     for (const item of content.items) {
-      if (!item.str) continue
-      // Round Y to nearest 2px to group items on the same line
-      const y = Math.round((viewport.height - item.transform[5]) / 2) * 2
-      if (!lineMap[y]) lineMap[y] = []
-      lineMap[y].push({ x: item.transform[4], str: item.str })
-    }
+      if (item.str === undefined) continue
+      let str = item.str.trim()
+      const right = item.transform[4] + (item.width || 0)
 
-    // Sort lines top-to-bottom, items left-to-right within each line
-    const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => a - b)
-    const lines = sortedYs.map(y => {
-      const items = lineMap[y].sort((a, b) => a.x - b.x)
-      return items.map(it => it.str).join('  ')
-    })
+      if (!str) {
+        // Empty item — just a structural/EOL marker
+        if (item.hasEOL && buf) { lines.push(buf.replace(/\s+$/, '')); buf = '' }
+        continue
+      }
+
+      // Word boundary: if this item starts noticeably to the right of the end
+      // of the previous one, the PDF has a gap between them -> insert a space.
+      if (prevRight !== null && item.transform[4] - prevRight > GAP_THRESHOLD) {
+        str = ' ' + str
+      }
+
+      buf += str
+      prevRight = right
+
+      if (item.hasEOL) { lines.push(buf.replace(/\s+$/, '')); buf = ''; prevRight = null }
+    }
+    if (buf) lines.push(buf.replace(/\s+$/, ''))
 
     pages.push(lines.join('\n'))
   }
